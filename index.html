@@ -23,6 +23,7 @@
     <div style="margin-top: 30px;">
         <button id="longTask">longTask</button>
         <button id="setTimeout">setTimeout</button>
+        <button id="setTimeout_promise">setTimeout promise</button>
         <button id="yield">yield</button>
         <button id="postTask">postTask</button>
     </div>
@@ -35,13 +36,27 @@
             })
         }).observe({ entryTypes: ["longtask"] });
 
+        const tasks = [
+            validateForm,
+            showSpinner,
+            saveToDatabase,
+            updateUI,
+            sendAnalytics
+        ]
+
         function runTask(name, runningTime = 30) {
-            console.time(name)
+            const id = Math.random()
+            const label = `${name}_${id}`
+            console.time(label)
             const startTime = Date.now()
 
             while (Date.now() - startTime < runningTime) { }
 
-            console.timeEnd(name)
+            console.timeEnd(label)
+        }
+
+        async function yieldToMain() {
+            return new Promise(setTimeout)
         }
 
         function validateForm() {
@@ -60,14 +75,29 @@
             runTask('sendAnalytics')
         }
 
-        document.querySelector('button#longTask').addEventListener('click', () => {
+        function otherTask() {
+            runTask('other')
+        }
+
+        /**
+         * 模拟一个长任务
+         */
+        function saveSettings() {
             validateForm();
             showSpinner();
             saveToDatabase();
             updateUI();
             sendAnalytics();
+        }
+        document.querySelector('button#longTask').addEventListener('click', () => {
+            saveSettings();
+            otherTask();
         })
-        document.querySelector('button#setTimeout').addEventListener('click', () => {
+
+        /**
+         * 通过 setTimeout 分成两个任务
+         */
+        function saveSettings_setTimeoutSplitting() {
             validateForm();
             showSpinner();
             updateUI();
@@ -75,36 +105,56 @@
                 saveToDatabase();
                 sendAnalytics();
             })
+        }
+        document.querySelector('button#setTimeout').addEventListener('click', () => {
+            saveSettings_setTimeoutSplitting()
+            otherTask();
         })
-        document.querySelector('button#yield').addEventListener('click', async () => {
-            const tasks = [
-                validateForm,
-                showSpinner,
-                saveToDatabase,
-                updateUI,
-                sendAnalytics
-            ]
 
+        async function saveSettings_setTimeoutPromiseSplittingTask() {
             for (const task of tasks) {
-                await scheduler.yield()
-                runTask()
+                task()
+                await yieldToMain();
             }
+        }
+        document.querySelector('button#setTimeout_promise').addEventListener('click', async () => {
+            await saveSettings_setTimeoutPromiseSplittingTask();
+            otherTask();
         })
-        document.querySelector('button#postTask').addEventListener('click', () => {
-            // Validate the form at high priority
-            scheduler.postTask(validateForm, { priority: 'user-blocking' });
 
-            // Show the spinner at high priority:
-            scheduler.postTask(showSpinner, { priority: 'user-blocking' });
+        async function saveSettings_yield() {
+            for (const task of tasks) {
+                task()
+                await scheduler.yield()
+            }
+        }
+        document.querySelector('button#yield').addEventListener('click', async () => {
+            await saveSettings_yield();
+            otherTask();
+        })
 
-            // Update the database in the background:
-            scheduler.postTask(saveToDatabase, { priority: 'background' });
+        async function saveSettings_postTask() {
+            await Promise.all([
+                // Validate the form at high priority
+                scheduler.postTask(validateForm, { priority: 'user-blocking' }),
 
-            // Update the user interface at high priority:
-            scheduler.postTask(updateUI, { priority: 'user-blocking' });
+                // Show the spinner at high priority:
+                scheduler.postTask(showSpinner, { priority: 'user-blocking' }),
 
-            // Send analytics data in the background:
-            scheduler.postTask(sendAnalytics, { priority: 'background' });
+                // Update the database in the background:
+                scheduler.postTask(saveToDatabase, { priority: 'background' }),
+
+                // Update the user interface at high priority:
+                scheduler.postTask(updateUI, { priority: 'user-blocking' }),
+
+                // Send analytics data in the background:
+                scheduler.postTask(sendAnalytics, { priority: 'background' }),
+            ])
+        }
+        document.querySelector('button#postTask').addEventListener('click', async () => {
+            await saveSettings_postTask();
+            // 这里不符合直觉的是： otherTask 和 sendAnalytics 会在同一个任务里执行，需要看 postTask 的源码才能找到原因了
+            otherTask();
         })
     </script>
 </body>
