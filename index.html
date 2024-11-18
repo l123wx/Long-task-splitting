@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./scheduler-polyfill.js"></script>
+</head>
+
+<body>
+    <svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
+        xmlns:xlink="http://www.w3.org/1999/xlink" version="1.0" width="64px" height="64px" viewBox="0 0 128 128"
+        xml:space="preserve">
+        <g>
+            <path d="M64 9.75A54.25 54.25 0 0 0 9.75 64H0a64 64 0 0 1 128 0h-9.75A54.25 54.25 0 0 0 64 9.75z"
+                fill="#66bd10" />
+            <animateTransform attributeName="transform" type="rotate" from="0 64 64" to="360 64 64" dur="800ms"
+                repeatCount="indefinite" />
+        </g>
+    </svg>
+
+    <div style="margin-top: 30px;">
+        <button id="longTask">longTask</button>
+        <button id="setTimeout">setTimeout</button>
+        <button id="yield">yield</button>
+        <button id="postTask">postTask</button>
+    </div>
+    <script>
+        new PerformanceObserver(function (list) {
+            const perfEntries = list.getEntries();
+            perfEntries.forEach(entry => {
+                console.log(entry)
+                console.log(`发现一个长任务，耗时：${entry.duration}`)
+            })
+        }).observe({ entryTypes: ["longtask"] });
+
+        function runTask(name, runningTime = 30) {
+            console.time(name)
+            const startTime = Date.now()
+
+            while (Date.now() - startTime < runningTime) { }
+
+            console.timeEnd(name)
+        }
+
+        function validateForm() {
+            runTask('validateForm')
+        }
+        function showSpinner() {
+            runTask('showSpinner')
+        }
+        function saveToDatabase() {
+            runTask('saveToDatabase')
+        }
+        function updateUI() {
+            runTask('updateUI')
+        }
+        function sendAnalytics() {
+            runTask('sendAnalytics')
+        }
+
+        document.querySelector('button#longTask').addEventListener('click', () => {
+            validateForm();
+            showSpinner();
+            saveToDatabase();
+            updateUI();
+            sendAnalytics();
+        })
+        document.querySelector('button#setTimeout').addEventListener('click', () => {
+            validateForm();
+            showSpinner();
+            updateUI();
+            setTimeout(() => {
+                saveToDatabase();
+                sendAnalytics();
+            })
+        })
+        document.querySelector('button#yield').addEventListener('click', async () => {
+            const tasks = [
+                validateForm,
+                showSpinner,
+                saveToDatabase,
+                updateUI,
+                sendAnalytics
+            ]
+
+            for (const task of tasks) {
+                await scheduler.yield()
+                runTask()
+            }
+        })
+        document.querySelector('button#postTask').addEventListener('click', () => {
+            // Validate the form at high priority
+            scheduler.postTask(validateForm, { priority: 'user-blocking' });
+
+            // Show the spinner at high priority:
+            scheduler.postTask(showSpinner, { priority: 'user-blocking' });
+
+            // Update the database in the background:
+            scheduler.postTask(saveToDatabase, { priority: 'background' });
+
+            // Update the user interface at high priority:
+            scheduler.postTask(updateUI, { priority: 'user-blocking' });
+
+            // Send analytics data in the background:
+            scheduler.postTask(sendAnalytics, { priority: 'background' });
+        })
+    </script>
+</body>
+
+</html>
